@@ -255,6 +255,7 @@ FAMILIAS: list[Familia] = [
             (ATENCAO, "Mesmos fatos do extrato: usar para tipo e mensagem, não para somar valores."),
         ],
         extras=[("Tipos", _extra_ui_tipos), ("Com mensagem", _extra_msg_ui)],
+        pedir=[("Tipo de pedido de cada contribuição (Anime, Livro, Jogo, Pedidos, Viagens, Aula, Promover Logo), não só React e Música", ALTA, [1, 2])],
     ),
     Familia(
         id="castcoin_catalogo", nome="Catálogo, preços e metas", fonte="Castcoin",
