@@ -1,0 +1,110 @@
+<ul>
+    <li><b>Como usar:</b> copie o bloco abaixo inteiro e cole num assistente de IA com acesso aos sistemas, ou use como especificação para quem vai extrair à mão.</li>
+    <li><b>O que não sai:</b> CPF, e-mail, telefone, nome completo, endereço e dados bancários. Toda pessoa vira um id pseudônimo.</li>
+    <li><b>Para os analistas:</b> a aba "Resumo para analistas" explica cada arquivo.</li>
+  </ul>
+  <div class="codebox">
+    <div class="codebar"><span>PROMPT · 15 ARQUIVOS</span><button class="copy" id="copy">Copiar prompt</button></div>
+<pre id="prompt"># Extração de dados: plataforma de doações e lives
+
+Você vai extrair dados de duas fontes — a plataforma de doações e o canal onde as lives acontecem — para um projeto de análise interna. O objetivo do projeto é entender o que o público compra e pede, por quanto, e como o que acontece na live se relaciona com os pedidos na plataforma.
+
+Siga as regras abaixo à risca. Quando um dado pedido não existir, NÃO invente nem estime: deixe o campo vazio e registre a ausência no arquivo LEIAME.md (seção "O que não existe").
+
+## 1. Etapas
+
+1. AMOSTRA: extraia todos os arquivos abaixo para UMA live completa e recente, incluindo todos os pedidos feitos na plataforma no dia dessa live (00:00 a 23:59, horário de Brasília). Entregue e aguarde a validação antes de seguir.
+2. HISTÓRICO: depois da amostra validada, extraia o período completo disponível, desde o registro mais antigo. Informe no LEIAME.md a data mais antiga de cada arquivo.
+
+## 2. Regras gerais (valem para todos os arquivos)
+
+- Formato: CSV, UTF-8, separador vírgula, primeira linha com os nomes das colunas exatamente como especificados, textos entre aspas duplas quando tiverem vírgula, aspas ou quebra de linha.
+- Datas e horas: ISO 8601 em UTC com "Z" no final (ex.: 2026-09-23T22:14:05Z). Se o sistema só tiver horário local, converta para UTC e informe no LEIAME.md qual era o fuso de origem.
+- Dinheiro: inteiro em centavos (R$ 12,50 = 1250). Nunca use vírgula ou ponto decimal em valores.
+- Ids: estáveis. O mesmo item deve ter o mesmo id em todos os arquivos e em todas as extrações futuras.
+- Pessoas (compradores, autores de chat, autores de comentários): substitua o identificador original por um id pseudônimo = SHA-256 de (identificador original + uma chave secreta), em hexadecimal, 16 primeiros caracteres. A chave secreta fica com vocês, não é enviada e deve ser a mesma em todas as extrações, para que a mesma pessoa tenha sempre o mesmo id.
+- NUNCA inclua: CPF, e-mail, telefone, nome completo, endereço, dados bancários ou de cartão, IP.
+- Textos (mensagens, chat, comentários, transcrição) vão como estão, sem edição.
+- Campo que não existe no sistema: coluna presente e vazia, com explicação no LEIAME.md.
+
+## 3. Plataforma de doações
+
+### doacoes_produtos.csv — uma linha por produto do catálogo (react, anime, livro, curso etc.)
+produto_id, nome, categoria, ativo (1 ou 0), criado_em, desativado_em
+
+### doacoes_minimos.csv — uma linha por período em que um valor mínimo (ou preço) valeu para um produto
+produto_id, tipo_valor (minimo ou preco_fixo), valor_centavos, vigente_desde, vigente_ate (vazio = ainda vale)
+Se o sistema não guarda o histórico de configuração, envie o valor atual e liste no LEIAME.md as mudanças de que o time se lembra, com data aproximada marcada como aproximada.
+
+### doacoes_compradores.csv — uma linha por usuário que já fez algum pedido
+comprador_id (pseudônimo), criado_em, primeiro_pedido_em, ultimo_pedido_em, e todos os campos de perfil disponíveis que NÃO estejam na lista proibida (ex.: UF, cidade, faixa etária, gênero declarado, como conheceu). Liste no LEIAME.md todos os campos de perfil que o sistema tem, inclusive os que ficaram de fora e por quê.
+
+### doacoes_pedidos.csv — uma linha por pedido ou doação, em qualquer situação
+pedido_id, comprador_id, produto_id (vazio se for doação sem produto), valor_centavos, criado_em, pago_em, situacao (pago, pendente, cancelado, estornado, expirado), mensagem, link_midia, exibido_na_tela (1, 0 ou vazio), atendido (1, 0 ou vazio), atendido_em, origem (utm, código ou página de origem, se houver), meta_id (se o pedido contou para uma meta)
+
+### doacoes_funil.csv — uma linha por evento de navegação na página de doação (só se o sistema registrar)
+evento_id, sessao_id, comprador_id (vazio se não logado), produto_id, tipo_evento (visita, escolheu_produto, iniciou_pagamento, pagou, abandonou), ocorrido_em
+Se existir só "carrinho abandonado" e não o funil completo, envie apenas esses eventos e explique no LEIAME.md.
+
+### doacoes_metas.csv — uma linha por meta (barra de meta) exibida
+meta_id, descricao, valor_alvo_centavos, inicio_em, fim_em, batida_em (vazio se não foi batida)
+
+### doacoes_apelidos.csv — RESTRITO, enviar só com aprovação do responsável pela plataforma
+comprador_id, apelido_exibido (o nome que aparece publicamente no alerta da live, nunca o nome do cadastro)
+Envie em arquivo separado. Serve para casar a leitura do pedido na live com o pedido na plataforma.
+
+## 4. Lives e canal (YouTube)
+
+### lives_canais.csv — uma linha por canal onde há lives
+canal_id, nome, url
+
+### lives_lives.csv — uma linha por live
+live_id (id do vídeo no YouTube), canal_id, titulo, inicio_agendado, inicio_real, fim_real, duracao_s, apresentadores (nomes separados por ";")
+inicio_real é o início efetivo da transmissão, não o agendado. É o campo mais importante deste arquivo: todo o resto é alinhado por ele.
+
+### lives_transcricao.csv — uma linha por trecho de fala
+live_id, seq (ordem do trecho), inicio_s, fim_s (segundos desde o início do VÍDEO), falante (nome ou rótulo, vazio se não identificado), texto
+Informe no LEIAME.md: a ferramenta que gerou a transcrição, se o segundo 0 do vídeo coincide com inicio_real, e se o falante é identificado. Se só existirem arquivos .vtt ou .srt, envie-os brutos numa pasta transcricoes/ com o nome &lt;live_id&gt;.vtt.
+
+### lives_chat.csv — uma linha por mensagem de chat, nas lives que tiverem chat
+live_id, mensagem_id, autor_id (pseudônimo), enviada_em (UTC), offset_s (segundos desde o início do vídeo, se disponível), tipo (mensagem, superchat, membro, moderacao), valor_centavos (só superchat), texto
+Liste no LEIAME.md quais lives têm chat e quais não.
+
+### lives_audiencia.csv — uma linha por live e minuto
+live_id, minuto (0, 1, 2… desde inicio_real), espectadores_simultaneos
+Se o YouTube Studio só fornecer outra granularidade, use a que existir e informe no LEIAME.md.
+
+### canal_videos.csv — uma linha por vídeo publicado (lives, vídeos e shorts)
+video_id, canal_id, tipo (live, video, short), titulo, descricao (completa, com a minutagem de capítulos se houver), publicado_em, duracao_s
+
+### canal_metricas.csv — uma linha por vídeo por data de extração
+video_id, extraido_em, views, curtidas, comentarios, tempo_exibicao_min, duracao_media_visualizacao_s, inscritos_ganhos, pico_simultaneos (só lives), media_simultaneos (só lives)
+
+### canal_comentarios.csv — uma linha por comentário nos vídeos
+video_id, comentario_id, resposta_de (id do comentário pai, vazio se for comentário raiz), autor_id (pseudônimo), publicado_em, curtidas, texto
+
+## 5. Entrega
+
+- Um arquivo .zip por etapa, com o nome extracao_&lt;amostra|historico&gt;_&lt;AAAA-MM-DD&gt;.zip, contendo os CSVs, a pasta transcricoes/ (se houver) e o LEIAME.md.
+- Envio por canal privado (drive com acesso restrito aos nomes combinados). Nunca por link público ou e-mail aberto.
+- LEIAME.md com: data da extração; período coberto; sistema de origem de cada arquivo; número de linhas por arquivo; fuso horário de origem; "O que não existe" (campos e arquivos indisponíveis e por quê); problemas conhecidos (lacunas, períodos com falha, mudanças de sistema).
+
+## 6. Conferências antes de enviar
+
+Rode e registre o resultado no LEIAME.md:
+
+1. Nenhum id repetido na coluna de id de cada arquivo.
+2. Todo produto_id, comprador_id, live_id e video_id citado existe no arquivo de referência correspondente.
+3. Todas as datas terminam em "Z" e caem dentro do período informado.
+4. Nenhum valor em centavos negativo ou com casa decimal.
+5. Nenhuma coluna proibida (CPF, e-mail, telefone, nome completo, endereço, dados bancários, IP).
+6. Contagem de pedidos pagos e soma de valor pago por mês, para bater com o painel da plataforma.
+
+## 7. Perguntas para responder no LEIAME.md
+
+1. A plataforma de doações permite doação em grupo com meta para um mesmo pedido (várias pessoas contribuindo até um valor)? Se não, existe algo parecido?
+2. O sistema registra se um pedido foi atendido pelos apresentadores? Como?
+3. O carrinho abandonado é registrado? Desde quando?
+4. Os links da plataforma divulgados nas lives têm código de origem (utm ou similar)?
+5. Quais mudanças de valor mínimo aconteceram, e quando?</pre>
+  </div>

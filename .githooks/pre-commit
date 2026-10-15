@@ -1,0 +1,3 @@
+#!/bin/sh
+# Trava de dados confidenciais. Ativada por: git config core.hooksPath .githooks
+exec python3 "$(git rev-parse --show-toplevel)/tools/guarda_dados.py"

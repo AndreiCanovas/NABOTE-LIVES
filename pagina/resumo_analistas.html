@@ -1,0 +1,55 @@
+<p class="lead">O prompt pede 15 arquivos CSV (7 da plataforma de doações, 8 das lives e do canal), mais um LEIAME.md que documenta o que existe e o que falta. A extração vem em duas etapas: uma amostra de uma live completa, para validar, e depois o histórico inteiro.</p>
+
+  <div>
+    <h2>Arquivos pedidos</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Arquivo</th><th>Uma linha por</th><th>Campos principais</th><th>Serve para</th><th>Obrigatório</th></tr></thead>
+      <tbody>
+        <tr class="grp"><td colspan="5">Plataforma de doações</td></tr>
+        <tr><td><code>doacoes_produtos</code></td><td>produto do catálogo</td><td>produto_id, nome, categoria, ativo</td><td>Frente 1</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>doacoes_minimos</code></td><td>período de valor mínimo ou preço</td><td>produto_id, tipo_valor, valor_centavos, vigência</td><td>Frente 1 (preço)</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>doacoes_compradores</code></td><td>usuário que já pediu</td><td>comprador_id, datas, campos de perfil permitidos</td><td>Frente 1 (perfil)</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>doacoes_pedidos</code></td><td>pedido ou doação, qualquer situação</td><td>valor, horários, situação, mensagem, link, atendido, origem, meta</td><td>Frentes 1, 2 e 3</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>doacoes_funil</code></td><td>evento na página de doação</td><td>sessão, produto, tipo de evento, horário</td><td>Frente 1 (abandono)</td><td><span class="pill">se existir</span></td></tr>
+        <tr><td><code>doacoes_metas</code></td><td>barra de meta exibida</td><td>alvo, início, fim, quando foi batida</td><td>Frente 3, v2</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>doacoes_apelidos</code></td><td>comprador</td><td>apelido exibido no alerta da live</td><td>Frente 4</td><td><span class="pill warn">restrito</span></td></tr>
+        <tr class="grp"><td colspan="5">Lives e canal</td></tr>
+        <tr><td><code>lives_canais</code></td><td>canal</td><td>canal_id, nome</td><td>todas</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>lives_lives</code></td><td>live</td><td>início real, fim, duração, apresentadores</td><td>todas (é o relógio)</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>lives_transcricao</code></td><td>trecho de fala</td><td>início/fim em segundos, falante, texto</td><td>Frentes 2, 3 e 4</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>lives_chat</code></td><td>mensagem de chat</td><td>autor, horário, tipo, texto</td><td>Frentes 2 e 4</td><td><span class="pill">onde existir</span></td></tr>
+        <tr><td><code>lives_audiencia</code></td><td>live × minuto</td><td>espectadores simultâneos</td><td>Frente 3 (denominador)</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>canal_videos</code></td><td>vídeo publicado</td><td>tipo, título, descrição com capítulos, data</td><td>Frente 2</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>canal_metricas</code></td><td>vídeo × data de extração</td><td>views, curtidas, comentários, tempo de exibição, simultâneos</td><td>engajamento por tema</td><td><span class="pill yes">sim</span></td></tr>
+        <tr><td><code>canal_comentarios</code></td><td>comentário</td><td>autor, data, curtidas, texto</td><td>Frente 2</td><td><span class="pill yes">sim</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div>
+    <h2>Convenções</h2>
+    <ul>
+      <li><b>Horário em UTC.</b> É o que permite alinhar as duas plataformas, que não têm chave comum. A transcrição vem em segundos desde o início do vídeo e é convertida usando <code>inicio_real</code> de <code>lives_lives</code>.</li>
+      <li><b>Dinheiro em centavos inteiros.</b> Evita erro de arredondamento nas somas.</li>
+      <li><b>Pessoas são pseudônimos.</b> Hash com chave secreta que fica com os administradores: a mesma pessoa tem sempre o mesmo id, mas ninguém do lado da análise consegue voltar ao nome.</li>
+      <li><b>Ausência é declarada.</b> Campo inexistente vem vazio e explicado no LEIAME.md, nunca estimado.</li>
+    </ul>
+  </div>
+
+  <div>
+    <h2>O que fica de fora, e por quê</h2>
+    <p class="note">CPF, e-mail, telefone, nome completo, endereço, dados bancários e IP não são pedidos. Nenhuma análise do plano precisa deles, e tirá-los reduz o risco de LGPD. A única exceção controlada é <code>doacoes_apelidos</code>: o apelido que já aparece publicamente na live, em arquivo separado e só com aprovação.</p>
+  </div>
+
+  <div>
+    <h2>O que conferir ao receber a amostra</h2>
+    <ul class="checks">
+      <li>Os 15 arquivos vieram, ou a ausência está explicada no LEIAME.md.</li>
+      <li>As conferências da seção 6 do prompt foram rodadas e registradas.</li>
+      <li>O <code>inicio_real</code> da live bate com o segundo 0 da transcrição. Testar com um pedido lido em voz alta: o horário do pedido deve ficar pouco antes do trecho em que ele é lido.</li>
+      <li>A soma de pedidos pagos do dia bate com o painel da plataforma.</li>
+      <li>O mesmo comprador tem o mesmo id em <code>doacoes_pedidos</code> e <code>doacoes_compradores</code>.</li>
+      <li>As respostas da seção 7 do prompt (doação em grupo, atendimento, carrinho, código de origem, histórico de mínimos) vieram. Elas decidem o que entra na Fase 1 do plano.</li>
+    </ul>
+    <p style="margin-top:12px;color:var(--fg-2)">Só depois dessa conferência o histórico completo é liberado.</p>
+  </div>

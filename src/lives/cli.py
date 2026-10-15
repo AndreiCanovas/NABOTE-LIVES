@@ -1,0 +1,79 @@
+"""lives — linha de comando do projeto.
+
+    lives importar <zip>                  zip da entrega -> banco
+    lives status                          status das famílias (JSON na pasta de trabalho)
+    lives pagina --plano <leitura.json>   página compartilhada, a partir do plano + status
+
+Tudo que sai daqui é gravado na pasta de trabalho, fora do repositório.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+from . import db, doc_html, importar, pagina, status
+
+SAIDA = db.PASTA_DADOS / "processado"
+
+
+def _gravar(caminho: Path, texto: str) -> None:
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_text(texto, encoding="utf-8")
+    os.chmod(caminho, 0o600)
+
+
+def cmd_importar(a) -> int:
+    conn = db.conectar(a.banco)
+    db.migrar(conn)
+    r = importar.importar_zip(conn, a.zip)
+    if r["ja_importado"]:
+        print(f"zip já importado ({r['zip_sha256'][:12]}…): nada a fazer")
+    else:
+        print(f"importado: {r['tabelas']} tabelas, {r['linhas']:,} linhas".replace(",", "."))
+    return 0
+
+
+def cmd_status(a) -> int:
+    st = status.status_geral(db.conectar(a.banco))
+    destino = Path(a.saida)
+    _gravar(destino, json.dumps(st, ensure_ascii=False, indent=1))
+    for c in st["familias"]:
+        print(f"{c['status_rotulo']:<15} {c['fonte']} · {c['nome']}: {c['registros']:,} {c['unidade']}"
+              .replace(",", "."))
+    print(f"\n-> {destino}")
+    return 0
+
+
+def cmd_pagina(a) -> int:
+    st = (json.loads(Path(a.status).read_text(encoding="utf-8")) if a.status
+          else status.status_geral(db.conectar(a.banco)))
+    xml, rev = doc_html.carregar_xml(a.plano)
+    html = pagina.montar(st, doc_html.converter(xml), rev)
+    for destino in a.saida:
+        _gravar(Path(destino), html)
+        print(f"-> {destino}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="lives")
+    p.add_argument("--banco", default=str(db.BANCO_PADRAO))
+    sub = p.add_subparsers(dest="cmd", required=True)
+    i = sub.add_parser("importar", help="zip da entrega -> banco")
+    i.add_argument("zip")
+    s = sub.add_parser("status", help="status das famílias de dados")
+    s.add_argument("--saida", default=str(SAIDA / "status.json"))
+    g = sub.add_parser("pagina", help="página compartilhada")
+    g.add_argument("--plano", required=True, help="leitura completa do documento do plano (JSON)")
+    g.add_argument("--status", help="status.json já calculado (padrão: calcula agora)")
+    g.add_argument("--saida", nargs="+", default=[str(SAIDA / "pagina" / "painel.html")])
+    a = p.parse_args(argv)
+    return {"importar": cmd_importar, "status": cmd_status, "pagina": cmd_pagina}[a.cmd](a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

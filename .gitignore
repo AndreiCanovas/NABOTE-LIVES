@@ -1,0 +1,37 @@
+# =====================================================================
+# DADOS CONFIDENCIAIS NUNCA ENTRAM NESTE REPOSITÓRIO.
+# Os dados vivem fora do git (drive restrito + pasta de trabalho local).
+# Esta lista é a segunda trava; a primeira é tools/guarda_dados.py.
+# =====================================================================
+*.csv
+*.tsv
+*.vtt
+*.srt
+*.zip
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.parquet
+*.xlsx
+*.xls
+*.pdf
+*.json
+!pyproject.json
+LEIAME*.md
+dados/
+dados_*/
+saida/
+relatorios/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# segredos
+.env
+.env.*
