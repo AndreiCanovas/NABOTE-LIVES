@@ -138,6 +138,20 @@ class TestCalcular(unittest.TestCase):
         c = {i["intencao"]: i["n"] for i in self.r["comentarios"]["intencoes"]}
         self.assertEqual(c["pergunta"], 1)
 
+    def test_grupos_por_termo_tema_e_intencao(self):
+        grupos = [
+            {"id": "astro", "nome": "Astronomia", "termos": ["planeta*"], "intencoes": ["pedido"],
+             "catalogo": ["react"]},
+            {"id": "culinaria", "nome": "Culinária", "temas": ["Tema B"], "intencoes": ["pedido", "pergunta"]},
+            {"id": "so_apoio", "nome": "Só apoio", "regex": [r"\bboa live\b"], "intencoes": ["pedido"]},
+        ]
+        r = {g["id"]: g for g in frente2.calcular(self.conn, LEXICO, grupos)["rascunho_grupos"]}
+        self.assertEqual(r["astro"]["n"], 1)
+        self.assertEqual(r["astro"]["castcoin_livre"], 1)
+        self.assertEqual([p["nome"] for p in r["astro"]["produtos"]], ["React"])
+        self.assertEqual(r["culinaria"]["intencoes"], {"pergunta": 1})
+        self.assertEqual(r["so_apoio"]["n"], 0)   # "boa live" é apoio, não pedido
+
 
 if __name__ == "__main__":
     unittest.main()

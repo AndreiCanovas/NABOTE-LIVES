@@ -69,7 +69,9 @@ def cmd_frente3(a) -> int:
 
 def cmd_frente2(a) -> int:
     # o léxico de temas foi montado lendo as mensagens: fica na pasta de trabalho, não no código
-    r = frente2.calcular(db.conectar(a.banco), frente2.Lexico.carregar(a.lexico))
+    grupos = (json.loads(Path(a.grupos).read_text(encoding="utf-8"))["grupos"]
+              if a.grupos and Path(a.grupos).exists() else None)
+    r = frente2.calcular(db.conectar(a.banco), frente2.Lexico.carregar(a.lexico), grupos)
     _gravar(Path(a.saida), json.dumps(r, ensure_ascii=False, indent=1, default=str))
     print(f"-> {a.saida}")
     return 0
@@ -121,6 +123,8 @@ def main(argv: list[str] | None = None) -> int:
     f2 = sub.add_parser("frente2", help="agregados da Frente 2")
     f2.add_argument("--lexico", default=str(SAIDA / "frente2_lexico.json"),
                     help="léxico de temas (JSON na pasta de trabalho); sem ele, os temas ficam vazios")
+    f2.add_argument("--grupos", default=str(SAIDA / "frente2_grupos.json"),
+                    help="grupos propostos para a fila de demanda (JSON na pasta de trabalho)")
     f2.add_argument("--saida", default=str(SAIDA / "frente2.json"))
     f3 = sub.add_parser("frente3", help="agregados da Frente 3")
     f3.add_argument("--saida", default=str(SAIDA / "frente3.json"))

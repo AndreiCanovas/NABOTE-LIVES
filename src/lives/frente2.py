@@ -649,7 +649,44 @@ def _comentarios(conn: sqlite3.Connection) -> dict:
 
 # ---------------------------------------------------------------- total
 
-def calcular(conn: sqlite3.Connection, lexico: Lexico | None = None) -> dict:
+def avaliar_grupos(msgs: list[dict], definicoes: list[dict], catalogo: list[dict], lex: Lexico) -> list[dict]:
+    """Evidência de cada grupo proposto para a fila de demanda.
+
+    Um grupo junta mensagens por formato, por termo, por expressão regular (sobre o
+    texto normalizado) ou por tema (basta um) e se
+    restringe às intenções dadas. As definições ficam na pasta de trabalho: são
+    montadas lendo as mensagens e mudam com a validação do time."""
+    saida = []
+    for g in definicoes:
+        fmts, temas = set(g.get("formatos", [])), set(g.get("temas", []))
+        termos = Lexico._compilar(g["termos"]) if g.get("termos") else None
+        padrao = re.compile("|".join(g["regex"])) if g.get("regex") else None
+        intencoes = set(g.get("intencoes", ["pedido", "pergunta", "mídia"]))
+        sel = []
+        for m in msgs:
+            if m["intencao"] not in intencoes:
+                continue
+            tipo = m["tipo"] if m["plataforma"] == "Castcoin" else ""
+            n = lex.limpar(normalizar(URL.sub(" ", m["texto"])))
+            if ((fmts and fmts & formatos(m["texto"], tipo)) or (termos and termos.search(n))
+                    or (padrao and padrao.search(n)) or (temas and temas & lex.temas_de(m["texto"]))):
+                sel.append(m)
+        meses = sorted({m["mes"] for m in sel if m["mes"]})
+        cast = [m for m in sel if m["plataforma"] == "Castcoin"]
+        saida.append({
+            "id": g["id"], "nome": g["nome"], "tipo": g.get("tipo", "produto"),
+            "n": len(sel), "centavos": sum(m["centavos"] for m in sel),
+            "mediana": _mediana([m["centavos"] for m in sel]),
+            "plataformas": {p: sum(1 for m in sel if m["plataforma"] == p) for p in ("Castcoin", "LivePix")},
+            "castcoin_livre": sum(1 for m in cast if m["tipo"] == "Doação livre"),
+            "intencoes": dict(Counter(m["intencao"] for m in sel)),
+            "meses": len(meses), "de": meses[0] if meses else None, "ate": meses[-1] if meses else None,
+            "produtos": _produtos_do_formato(catalogo, tuple(g.get("catalogo", []))) if g.get("catalogo") else [],
+        })
+    return saida
+
+
+def calcular(conn: sqlite3.Connection, lexico: Lexico | None = None, grupos: list[dict] | None = None) -> dict:
     lex = lexico or Lexico()
     lives = _lives_transcritas(conn)
 
@@ -677,4 +714,5 @@ def calcular(conn: sqlite3.Connection, lexico: Lexico | None = None) -> dict:
         "leitura": _leitura(msgs, lives),
         "comentarios": _comentarios(conn),
         "lexico_carregado": bool(lex.temas),
+        "rascunho_grupos": avaliar_grupos(msgs, grupos, catalogo, lex) if grupos else [],
     }
