@@ -255,7 +255,8 @@ FAMILIAS: list[Familia] = [
             (ATENCAO, "Mesmos fatos do extrato: usar para tipo e mensagem, não para somar valores."),
         ],
         extras=[("Tipos", _extra_ui_tipos), ("Com mensagem", _extra_msg_ui)],
-        pedir=[("Tipo de pedido de cada contribuição (Anime, Livro, Jogo, Pedidos, Viagens, Aula, Promover Logo), não só React e Música", ALTA, [1, 2])],
+        pedir=[("Tipo de pedido de cada contribuição (Anime, Livro, Jogo, Pedidos, Viagens, Aula, Promover Logo), não só React e Música", ALTA, [1, 2]),
+               ("Comprador (id pseudônimo) de cada doação, para contar pessoas e não só mensagens", ALTA, [2, 4])],
     ),
     Familia(
         id="castcoin_catalogo", nome="Catálogo, preços e metas", fonte="Castcoin",
@@ -285,7 +286,9 @@ FAMILIAS: list[Familia] = [
             (ATENCAO, "Período de cobertura diferente do extrato: comparar só na janela comum."),
         ],
         extras=[("Estados", _extra_exec)],
-        pedir=[("Hora em que cada pedido foi atendido (exibido ou concluído na live)", ALTA, [1, 3]), ("Vínculo entre cada contribuição e o pedido executado", MEDIA, [1])],
+        pedir=[("Hora em que cada pedido foi atendido (exibido ou concluído na live)", ALTA, [1, 3]),
+               ("Confirmar se os pedidos de React e Música marcados como aceitos, sem conclusão, foram atendidos", ALTA, [1, 2]),
+               ("Vínculo entre cada contribuição e o pedido executado", MEDIA, [1])],
     ),
     Familia(
         id="castcoin_compradores", nome="Compradores", fonte="Castcoin",
@@ -313,7 +316,7 @@ FAMILIAS: list[Familia] = [
             (INFO, "Campos omitidos na revisão de privacidade estão registrados em suplemento próprio."),
         ],
         extras=[("Com mensagem", _extra_msg_livepix)],
-        pedir=[("Fuso horário das datas do arquivo LivePix", MEDIA, [3])],
+        pedir=[("Confirmar o fuso horário das datas do arquivo LivePix", BAIXA, [3])],
     ),
     Familia(
         id="shopify", nome="Loja", fonte="Shopify",

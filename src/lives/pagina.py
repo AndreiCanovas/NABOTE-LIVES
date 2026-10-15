@@ -28,13 +28,13 @@ ANDAMENTO = [
     ("Fase 0", "Inventário dos dados", "feito"),
     ("Fase 1", "Base de dados e status", "feito"),
     ("Fase 2", "Frente 1: perfil e preço", "feito"),
-    ("Fase 3", "Frente 2: demanda", ""),
-    ("Fase 4", "Frente 3: efeito da live", "agora"),
+    ("Fase 3", "Frente 2: demanda", "agora"),
+    ("Fase 4", "Frente 3: efeito da live", "feito"),
     ("Fase 5", "Frente 4 e testes", ""),
 ]
 
 ABAS = [("status", "Status dos dados"), ("frente1", "Frente 1: perfil e preço"),
-        ("frente3", "Frente 3: efeito da live"), ("doc", "Documentação"),
+        ("frente2", "Frente 2: demanda"), ("frente3", "Frente 3: efeito da live"), ("doc", "Documentação"),
         ("prompt", "Prompt para os administradores"), ("resumo", "Resumo para analistas")]
 
 e = html.escape
@@ -164,10 +164,10 @@ CORES = {"LivePix": "var(--s1)", "Castcoin": "var(--s2)", "Loja Castcoin": "var(
          "Shopify": "var(--s3)", "Hotmart": "var(--s4)"}
 
 
-def _tabela(cab: list[str], linhas: list[list[str]], resumo: str = "Ver os números") -> str:
+def _tabela(cab: list[str], linhas: list[list[str]], resumo: str = "Ver os números", aberta: bool = False) -> str:
     th = "".join(f"<th>{e(c)}</th>" for c in cab)
     tr = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in l) + "</tr>" for l in linhas)
-    return (f'<details class="numeros"><summary>{e(resumo)}</summary><div class="tw">'
+    return (f'<details class="numeros"{" open" if aberta else ""}><summary>{e(resumo)}</summary><div class="tw">'
             f"<table><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table></div></details>")
 
 
@@ -303,6 +303,202 @@ def aba_frente1(f1: dict, achados_html: str) -> str:
 </section>"""
 
 
+def _por_minuto(v: float) -> str:
+    """Preço por minuto: inteiro a partir de R$ 10 (a divisão valor ÷ duração tem ruído de centavos)."""
+    return f"R$ {v:.0f}" if v >= 10 or abs(v - round(v)) < 0.05 else f"R$ {v:.2f}".replace(".", ",")
+
+
+def _troca_de_preco(precos: list[dict]) -> dict | None:
+    """Última mudança do preço por minuto do React: variação de mais de 10% entre meses seguidos."""
+    rs = [p for p in precos if p["tipo"] == "React" and p["reais_por_minuto"]]
+    for ant, dep in reversed(list(zip(rs, rs[1:]))):
+        if abs(dep["reais_por_minuto"] - ant["reais_por_minuto"]) > 0.1 * ant["reais_por_minuto"]:
+            return {"antes": ant, "depois": dep}
+    return None
+
+
+def aba_frente2(f2: dict, achados_html: str) -> str:
+    from . import graficos as G
+    R, P = G.reais, G.pct
+    pp, md, lt, tm = f2["por_plataforma"], f2["midia"], f2["leitura"], f2["temas"]
+    comp = {p: {c["intencao"]: c for c in v["composicao"]} for p, v in pp.items()}
+    pede = {p: c["pedido"]["fracao"] + c["pergunta"]["fracao"] for p, c in comp.items()}
+    per = {p: f"{G.mes_legivel(a)} a {G.mes_legivel(b)}" for p, (a, b) in f2["periodo"].items()}
+    troca = _troca_de_preco(md["precos"])
+    lives_lidas = sum(1 for l in lt["por_live"] if l["testaveis"])
+
+    ladr = [_ladrilho("Pedidos e perguntas", f"{P(pede.get('Castcoin', 0))} das mensagens",
+                      f"na Castcoin; na LivePix eram {P(pede.get('LivePix', 0))}")]
+    if troca:
+        a, d = troca["antes"], troca["depois"]
+        ladr.append(_ladrilho("React cobrado por minuto de vídeo",
+                              f"{_por_minuto(a['reais_por_minuto'])} → {_por_minuto(d['reais_por_minuto'])}",
+                              f"em {G.mes_legivel(d['mes'])}; pedidos de React no mês: {a['n']} em "
+                              f"{G.mes_legivel(a['mes'])}, {d['n']} em {G.mes_legivel(d['mes'])}"))
+    ladr.append(_ladrilho("Mesmo vídeo, várias pessoas", f"{md['repetidos_itens']} vídeos",
+                          f"pedidos 2 vezes ou mais, somando {md['repetidos_pedidos']} pedidos; "
+                          f"o mais pedido, {md['repetidos_max']} vezes"))
+    if lt["testaveis"]:
+        ladr.append(_ladrilho("Lidas em voz alta na live", f"{P(lt['taxa'])} das mensagens",
+                              f"em {lives_lidas} lives transcritas; ao acaso daria {P(lt['taxa_controle'])}; "
+                              f"atraso mediano de {lt['atraso_mediano']:.0f} min"))
+    blocos = []
+
+    # 1. intenção
+    mx = max(c["fracao"] for v in pp.values() for c in v["composicao"])
+    graf = "".join(
+        f'<div><h3>{e(p)} · {e(per[p])} · {_fmt(pp[p]["n"])} mensagens</h3><div class="rolagem">'
+        + G.barras_h([(c["rotulo"], c["fracao"], P(c["fracao"])) for c in pp[p]["composicao"]],
+                     maximo=mx, cor=CORES[p], largura_rotulo=230, W=440) + "</div></div>"
+        for p in ("Castcoin", "LivePix") if p in pp)
+    plats = [p for p in ("Castcoin", "LivePix") if p in pp]
+    tab = _tabela(["Intenção"] + [f"{p}: {c}" for p in plats for c in ("mensagens", "% das mensagens", "% do valor", "mediana")],
+                  [[e(ROT)] + [x for p in plats for x in (
+                      _fmt(comp[p][k]["n"]), P(comp[p][k]["fracao"]), P(comp[p][k]["fracao_valor"]),
+                      R(comp[p][k]["mediana"]))] for k, ROT in ((k, comp[plats[0]][k]["rotulo"]) for k in comp[plats[0]])])
+    cm = f2["comentarios"]
+    cm_c = {i["intencao"]: i["n"] for i in cm["intencoes"]}
+    nota_cm = (f" Nos comentários do canal ({cm['n']} com texto, em {cm['videos']} vídeos), "
+               f"{cm_c.get('pedido', 0) + cm_c.get('pergunta', 0)} são pedidos ou perguntas.") if cm["n"] else ""
+    blocos.append(_bloco(
+        "Para que servem as mensagens pagas",
+        "Cada mensagem recebe uma intenção, por regras de texto: mídia (traz link), pedido explícito "
+        "(\"fala sobre\", \"joga\", \"pode explicar\", \"vai ter…?\"), pergunta, apoio e comentário. As duas "
+        "plataformas vêm em sequência e ficam separadas. A regra erra: os números valem como ordem de grandeza."
+        + nota_cm,
+        f'<div class="duplo">{graf}</div>' + tab))
+
+    # 2. formato
+    fm = [f for f in f2["formatos"] if f["n"]]
+    def _prod(f):
+        if not f["produtos"]:
+            return "nenhum"
+        return "; ".join(f"{e(p['nome'])} ({'mín. ' if p['tipo_valor'] == 'minimo' else ''}{R(p['centavos'])})"
+                         for p in f["produtos"][:3]) + (f" e mais {len(f['produtos']) - 3}" if len(f["produtos"]) > 3 else "")
+    graf = G.barras_h([(f["formato"], f["n"], _fmt(f["n"]) + ("" if f["produtos"] else " · sem produto"))
+                       for f in fm], largura_rotulo=230, W=560)
+    tab = _tabela(["Formato", "Pedidos", "Castcoin", "Castcoin por doação livre", "LivePix", "Mediana paga",
+                   "Produto no catálogo"],
+                  [[e(f["formato"]), _fmt(f["n"]), _fmt(f["castcoin_n"]), _fmt(f["castcoin_via_livre"]),
+                    _fmt(f["por_plataforma"]["LivePix"]), R(f["mediana"]), _prod(f)] for f in fm])
+    blocos.append(_bloco(
+        "O que pedem, por formato",
+        "Pedidos, perguntas e links, separados pelo tipo de coisa pedida. Uma mensagem pode cair em mais de um "
+        "formato. \"Castcoin por doação livre\" conta quem pediu pela doação comum, sem usar o produto. "
+        "Formato sem produto no catálogo é candidato a produto novo.",
+        f'<div class="rolagem">{graf}</div>' + tab))
+
+    # 3. temas: demanda × oferta
+    linhas = [l for l in tm["linhas"] if l["n"] or l["lives"]]
+    if linhas and f2.get("lexico_carregado"):
+        cores = ("var(--accent)", "var(--eixo)")
+        graf = G.halteres([(l["tema"], l["demanda"], l["oferta"]) for l in linhas],
+                          ("Pedidos e perguntas", "Lives"), cores)
+        tab = _tabela(["Tema", "Pedidos e perguntas", "% da demanda", "Lives", "% das lives", "Diferença"],
+                      [[e(l["tema"]), _fmt(l["n"]), P(l["demanda"], 1), _fmt(l["lives"]), P(l["oferta"], 1),
+                        f"{100 * l['diferenca']:+.1f} p.p.".replace(".", ",")] for l in linhas])
+        blocos.append(_bloco(
+            "Temas: o que se pede e o que a live oferece",
+            f"Para cada tema, a parte que ele tem nos pedidos e perguntas ({_fmt(tm['com_tema'])} de "
+            f"{_fmt(tm['pedidos_perguntas'])} mensagens caíram em algum tema) e a parte que tem nas lives "
+            f"({_fmt(tm['lives_com_tema'])} lives com tema identificado pelo título). Ponto à direita do cinza: o "
+            "público pede mais do que a live oferece. Leitura indicativa: a mensagem é classificada por palavras, a "
+            "live pelo título.",
+            _legenda([("Pedidos e perguntas", cores[0]), ("Lives", cores[1])])
+            + f'<div class="rolagem">{graf}</div>' + tab))
+
+    # 4. fila de demanda: grupos candidatos
+    if f2["grupos"]:
+        def _como(g):
+            return ", ".join(f"{k} {v}" for k, v in sorted(g["intencoes"].items(), key=lambda kv: -kv[1]))
+        tab = _tabela(["Termo", "Mensagens", "Valor", "Meses com menção", "Período", "Como aparece", "Tema"],
+                      [[e(g["termo"]), _fmt(g["n"]), R(g["centavos"]), str(g["meses"]),
+                        f"{G.mes_legivel(g['de'])} a {G.mes_legivel(g['ate'])}" if g["de"] else "—",
+                        e(_como(g)), e(", ".join(g["temas"]) or "—")] for g in f2["grupos"]],
+                      resumo="Ver a lista", aberta=True)
+        blocos.append(_bloco(
+            "Fila de demanda: assuntos que voltam (a confirmar)",
+            "Palavras e pares de palavras que mais aparecem em pedidos, perguntas e links, contando cada mensagem "
+            "uma vez. É a matéria-prima da fila de demanda: o time confirma quais viram grupo e qual produto "
+            "atenderia cada um. As plataformas não identificam quem doou em cada mensagem, então a lista conta "
+            "mensagens, não pessoas.",
+            tab))
+
+    # 5. React e Música: preço por minuto
+    rc = [p for p in md["precos"] if p["tipo"] == "React"]
+    if rc:
+        pts = [(G.mes_legivel(p["mes"]), p["n"],
+                f"{G.mes_legivel(p['mes'])}: {p['n']} pedidos de React, {R(p['centavos'])}"
+                + (f", tabela de {_por_minuto(p['reais_por_minuto'])} por minuto" if p["reais_por_minuto"] else ""))
+               for p in rc]
+        marca = next((i for i, p in enumerate(rc) if troca and p["mes"] == troca["depois"]["mes"]), None)
+        rot = (f"{_por_minuto(troca['antes']['reais_por_minuto'])} → "
+               f"{_por_minuto(troca['depois']['reais_por_minuto'])} por minuto") if troca else ""
+        graf = G.colunas_simples(pts, marca_x=marca, rotulo_marca=rot, rotulos_cada=1, fmt=lambda v: f"{v:.0f}",
+                                 inteiros=True)
+        tab = _tabela(["Mês", "Tipo", "Pedidos", "Valor", "Minutos pagos", "Preço por minuto (tabela)",
+                       "Pedidos no preço da tabela", "Duração mediana"],
+                      [[G.mes_legivel(p["mes"]), p["tipo"], _fmt(p["n"]), R(p["centavos"]), _fmt(round(p["minutos"])),
+                        _por_minuto(p["reais_por_minuto"]) if p["reais_por_minuto"] else "—", P(p["na_moda"]),
+                        f"{p['duracao_mediana_s'] / 60:.1f} min".replace(".", ",") if p["duracao_mediana_s"] else "—"]
+                       for p in md["precos"]])
+        blocos.append(_bloco(
+            "React e Música: preço por minuto de vídeo e volume",
+            "Na fila de mídia, o valor pago dividido pela duração paga dá o preço por segundo de cada pedido. Em cada "
+            "mês, o preço mais comum é tomado como a tabela vigente; quem paga o mínimo por um vídeo curto ou dá "
+            "gorjeta fica fora dela. A tabela é inferida dos dados e precisa da confirmação dos administradores. "
+            "Atenção: o volume também depende de quantas lives houve no mês.",
+            f'<div class="rolagem">{graf}</div>' + tab))
+
+    # 6. origem dos vídeos e situação da fila
+    og = md["origens"]
+    graf = G.barras_h([(o["origem"], o["n"], _fmt(o["n"])) for o in og], largura_rotulo=150, W=460)
+    tab = _tabela(["Origem do link", "Pedidos", "React", "Música", "Mediana paga"],
+                  [[e(o["origem"]), _fmt(o["n"]), _fmt(o["react"]), _fmt(o["musica"]), R(o["mediana"])] for o in og])
+    est = _tabela(["Tipo", "Situação na fila", "Pedidos", "Valor"],
+                  [[e(x["tipo"]), e(x["estado"]), _fmt(x["n"]), R(x["centavos"])] for x in md["estados"]],
+                  resumo="Situação dos pedidos na fila")
+    blocos.append(_bloco(
+        "De onde vêm os vídeos pedidos",
+        f"{_fmt(md['n'])} pedidos de React e Música na fila, de {G.mes_legivel(md['de'])} a "
+        f"{G.mes_legivel(md['ate'])}, para {_fmt(md['itens'])} vídeos diferentes. {md['repetidos_itens']} vídeos foram "
+        f"pedidos mais de uma vez ({md['repetidos_pedidos']} pedidos), o que é um pedido coletivo feito sem "
+        f"ferramenta. {md['proprios']} pedidos apontam para vídeos do próprio canal.",
+        f'<div class="rolagem">{graf}</div>' + tab + est))
+
+    # 7. leitura na live e fuso da LivePix
+    if lt["testaveis"]:
+        fz = f2["fuso_livepix"]
+        pts = [(f"UTC{t['utc_mais']:+d}".replace("+0", "±0"), t["lidas"],
+                f"Se o horário da LivePix fosse UTC{t['utc_mais']:+d}: {t['lidas']} de {t['na_live']} mensagens "
+                "dentro de live casariam com a fala") for t in fz["testes"]]
+        graf_fz = G.colunas_simples(pts, rotulos_cada=1, fmt=lambda v: f"{v:.0f}", inteiros=True)
+        tab = _tabela(["Live (mês)", "Horas", "Mensagens durante a live", "Testáveis", "Lidas", "Casaram ao acaso"],
+                      [[G.mes_legivel(l["mes"]), f"{l['horas']:.1f}".replace(".", ","), str(l["mensagens"]),
+                        str(l["testaveis"]), str(l["lidas"]), str(l["controle"])] for l in lt["por_live"]])
+        c = lt["criterio"]
+        blocos.append(_bloco(
+            "A live lê as mensagens pagas?",
+            f"Nas {lt['lives']} lives com transcrição e início real, uma mensagem conta como lida quando pelo menos "
+            f"{P(c['limiar'])} das suas palavras aparecem na fala entre {c['antes_min']} minutos antes e "
+            f"{c['depois_min']} minutos depois dela. Mensagens com menos de {c['min_palavras']} palavras ficam de "
+            f"fora. A mesma conta, longe da mensagem, mede o acaso. Lidas: {lt['lidas']} de {lt['testaveis']} "
+            f"({P(lt['taxa'])}); ao acaso: {lt['controle']}. Mediana paga: {R(lt['mediana_lidas'])} entre as lidas e "
+            f"{R(lt['mediana_nao_lidas'])} entre as não lidas. Amostra pequena: leitura indicativa.",
+            tab + "<h3>O fuso da LivePix, testado contra a fala</h3>"
+            "<p class=\"lead\">O arquivo da LivePix não diz o fuso. Cada hipótese de fuso põe as mensagens num "
+            "minuto diferente; a certa é a que faz mais mensagens casarem com a fala das lives transcritas.</p>"
+            + f'<div class="rolagem">{graf_fz}</div>'))
+
+    return f"""
+<section class="panel" id="p-frente2">
+  <p class="lead">O que o público pede? Leitura das mensagens pagas da Castcoin ({e(per.get('Castcoin', '—'))}) e da LivePix ({e(per.get('LivePix', '—'))}), lado a lado e nunca somadas, mais a fila de React e Música e as transcrições das lives. {_fmt(f2['mensagens'])} mensagens com texto. Tudo agregado: nenhuma mensagem é reproduzida aqui.</p>
+  {f'<div class="achados"><h2>O que os números dizem</h2>{achados_html}</div>' if achados_html else ''}
+  <div class="ladrilhos">{''.join(ladr)}</div>
+  {''.join(blocos)}
+</section>"""
+
+
 CORES_F3 = {"Live registrada": "var(--s3)", "Provável live sem registro": "var(--s4)",
             "Sem sinal de live": "var(--eixo)"}
 
@@ -407,7 +603,7 @@ def aba_doc(doc: dict, rev: int | None) -> str:
 
 
 def montar(st: dict, doc: dict, rev: int | None, f1: dict | None = None, achados_html: str = "",
-           f3: dict | None = None, achados3_html: str = "") -> str:
+           f3: dict | None = None, achados3_html: str = "", f2: dict | None = None, achados2_html: str = "") -> str:
     css = (PAGINA / "estilo.css").read_text(encoding="utf-8") + _css_abas()
     prompt = (PAGINA / "prompt.html").read_text(encoding="utf-8")
     resumo = (PAGINA / "resumo_analistas.html").read_text(encoding="utf-8")
@@ -430,6 +626,7 @@ def montar(st: dict, doc: dict, rev: int | None, f1: dict | None = None, achados
 </header>
 {aba_status(st)}
 {aba_frente1(f1, achados_html) if f1 else '<section class="panel" id="p-frente1"><p class="lead">Em preparação.</p></section>'}
+{aba_frente2(f2, achados2_html) if f2 else '<section class="panel" id="p-frente2"><p class="lead">Em preparação.</p></section>'}
 {aba_frente3(f3, achados3_html) if f3 else '<section class="panel" id="p-frente3"><p class="lead">Em preparação.</p></section>'}
 {aba_doc(doc, rev)}
 <section class="panel" id="p-prompt">
@@ -442,7 +639,7 @@ def montar(st: dict, doc: dict, rev: int | None, f1: dict | None = None, achados
 <script>
 (function(){{
   var h=location.hash.replace('#','');
-  var abas={{status:1,frente1:1,frente3:1,doc:1,prompt:1,resumo:1}};
+  var abas={{status:1,frente1:1,frente2:1,frente3:1,doc:1,prompt:1,resumo:1}};
   if(abas[h]) {{ var r=document.getElementById('r-'+h); if(r) r.checked=true; }}
   if(h.indexOf('doc-')===0) {{ var d=document.getElementById('r-doc'); if(d) d.checked=true; }}
   document.addEventListener('click',function(ev){{

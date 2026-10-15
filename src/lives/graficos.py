@@ -42,12 +42,15 @@ def mes_legivel(aaaa_mm: str) -> str:
     return f"{MESES[int(aaaa_mm[5:7]) - 1]}/{aaaa_mm[2:4]}"
 
 
-def _ticks(maximo: float, n: int = 4) -> list[float]:
+def _ticks(maximo: float, n: int = 4, inteiros: bool = False) -> list[float]:
     if maximo <= 0:
         return [0]
     passo_bruto = maximo / n
     mag = 10 ** math.floor(math.log10(passo_bruto))
-    passo = next(m * mag for m in (1, 2, 2.5, 5, 10) if m * mag >= passo_bruto)
+    if inteiros:
+        mag = max(mag, 1)
+    passo = next(m * mag for m in (1, 2, 2.5, 5, 10)
+                 if m * mag >= passo_bruto and not (inteiros and (m * mag) % 1))
     return [passo * i for i in range(int(maximo / passo) + 2) if passo * i <= maximo * 1.0001 + passo]
 
 
@@ -285,13 +288,13 @@ def linhas_categoricas(series: dict[str, list[float | None]], cores: dict[str, s
 
 def colunas_simples(pontos: list[tuple[str, float, str]], marca_x: int | None = None, rotulo_marca: str = "",
                     cor: str = "var(--accent)", altura: int = 220, rotulos_cada: int = 4,
-                    fmt=lambda v: f"{v:.1f}".replace(".", ",")) -> str:
+                    fmt=lambda v: f"{v:.1f}".replace(".", ","), inteiros: bool = False) -> str:
     """Colunas sobre categorias em sequência (ex.: blocos de 15 min). `marca_x` desenha uma
     linha vertical antes da coluna de índice dado (ex.: o início da live)."""
     L, R, T, B = 52, 10, 20, 30
     W = max(560, 14 * len(pontos) + L + R)
     ih = altura - T - B
-    ticks = _ticks(max(v for _, v, _ in pontos) or 1)
+    ticks = _ticks(max(v for _, v, _ in pontos) or 1, inteiros=inteiros)
     topo = ticks[-1] or 1
     passo = (W - L - R) / len(pontos)
     bw = min(12, passo - 2)
@@ -308,7 +311,39 @@ def colunas_simples(pontos: list[tuple[str, float, str]], marca_x: int | None = 
             out.append(f'<text x="{x + bw / 2:.1f}" y="{altura - 8}" class="eixo" text-anchor="middle">{e(rot)}</text>')
     if marca_x is not None:
         xm = L + marca_x * passo
+        # rótulo à direita da linha; perto da borda, vira para a esquerda
+        cabe = xm + 5 + 6.5 * len(rotulo_marca) <= W - R
+        ancora = "start" if cabe else "end"
         out.append(f'<line x1="{xm:.1f}" x2="{xm:.1f}" y1="{T - 8}" y2="{T + ih}" class="minimo"/>'
-                   f'<text x="{xm + 5:.1f}" y="{T - 8}" class="rot">{e(rotulo_marca)}</text>')
+                   f'<text x="{xm + 5 if cabe else xm - 5:.1f}" y="{T - 8}" class="rot" '
+                   f'text-anchor="{ancora}">{e(rotulo_marca)}</text>')
     out.append(f'<line x1="{L}" x2="{W - R}" y1="{T + ih}" y2="{T + ih}" class="base"/></svg>')
+    return "".join(out)
+
+
+def halteres(linhas: list[tuple[str, float, float]], nomes: tuple[str, str], cores: tuple[str, str],
+             fmt=lambda v: pct(v), largura_rotulo: int = 300, W: int = 720) -> str:
+    """Duas fatias na mesma escala por categoria, ligadas por um traço. Serve para comparar a parte
+    de cada categoria em dois todos (ex.: na demanda e na oferta); o traço mostra a distância."""
+    lh, T, B = 26, 8, 26
+    altura = T + len(linhas) * lh + B
+    ticks = _ticks(max(max(a, b) for _, a, b in linhas) or 1)
+    topo = ticks[-1] or 1
+    area = W - largura_rotulo - 24
+    X = lambda v: largura_rotulo + v / topo * area  # noqa: E731
+    out = [f'<svg viewBox="0 0 {W} {altura}" class="graf" style="min-width:{W}px;max-width:{W}px" role="img">']
+    for t in ticks:
+        out.append(f'<line x1="{X(t):.1f}" x2="{X(t):.1f}" y1="{T}" y2="{altura - B}" class="grade"/>'
+                   f'<text x="{X(t):.1f}" y="{altura - 8}" class="eixo" text-anchor="middle">{e(fmt(t))}</text>')
+    for i, (rot, a, b) in enumerate(linhas):
+        y = T + i * lh + lh / 2
+        dica = f"{rot}: {nomes[0].lower()} {fmt(a)} · {nomes[1].lower()} {fmt(b)}"
+        out.append(f'<text x="{largura_rotulo - 10}" y="{y + 4:.1f}" class="rot" text-anchor="end">{e(rot)}</text>')
+        out.append(f'<line x1="{X(min(a, b)):.1f}" x2="{X(max(a, b)):.1f}" y1="{y:.1f}" y2="{y:.1f}" '
+                   f'stroke="var(--line)" stroke-width="3" stroke-linecap="round"/>')
+        out.append(f'<circle cx="{X(b):.1f}" cy="{y:.1f}" r="5" fill="{cores[1]}" class="anel"/>'
+                   f'<circle cx="{X(a):.1f}" cy="{y:.1f}" r="5" fill="{cores[0]}" class="anel"/>')
+        out.append(f'<rect x="{largura_rotulo}" y="{y - lh / 2:.1f}" width="{area + 12}" height="{lh}" '
+                   f'fill="transparent" {_tip(dica)}><title>{e(dica)}</title></rect>')
+    out.append("</svg>")
     return "".join(out)
