@@ -44,8 +44,8 @@ ALTA, MEDIA, BAIXA = "alta", "media", "baixa"
 ROTULO_PRIORIDADE = {ALTA: "Alta", MEDIA: "Média", BAIXA: "Baixa"}
 
 # formatos da coluna de tempo
-ISO = "iso"                 # 2026-01-28T17:13:28Z (ou com minutos só)
-DATA_BR = "data_br"         # 27/03/2023 21:15, sem fuso
+ISO = "iso"                 # 2025-06-01T12:00:00Z (ou só até os minutos)
+DATA_BR = "data_br"         # 01/06/2025 12:00, sem fuso
 
 
 @dataclass

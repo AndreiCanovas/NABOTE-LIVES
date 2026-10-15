@@ -40,7 +40,7 @@ class TestStatus(unittest.TestCase):
         self.assertEqual(c["status"], F.AUSENTE)
 
     def test_data_br(self):
-        self.assertEqual(status._data("27/03/2023 21:15", F.DATA_BR), "2023-03-27")
+        self.assertEqual(status._data("01/06/2025 12:00", F.DATA_BR), "2025-06-01")
         self.assertIsNone(status._data("ontem", F.ISO))
 
     def test_familias_nao_levam_numero_dos_dados(self):
