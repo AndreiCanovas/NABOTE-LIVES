@@ -271,7 +271,7 @@ FAMILIAS: list[Familia] = [
         ],
         extras=[("Produtos", _extra_produtos), ("Metas", _extra_metas)],
         avisos_calculados=_avisos_minimos,
-        pedir=[("Histórico de alterações de preço e de mínimo por produto, com a data de cada mudança", ALTA, [1]), ("Datas de início das metas e de quando foram batidas", MEDIA, [3]), ("Categoria e data de criação de cada produto", BAIXA, [1])],
+        pedir=[("Histórico de alterações de preço e de mínimo por produto, com a data de cada mudança", ALTA, [1]), ("Histórico das metas, incluindo a meta da live: valor de cada uma, início, fim e quando foi batida", ALTA, [1, 3]), ("Categoria e data de criação de cada produto", BAIXA, [1])],
     ),
     Familia(
         id="castcoin_execucao", nome="Execução de pedidos", fonte="Castcoin",
@@ -284,10 +284,11 @@ FAMILIAS: list[Familia] = [
             (BLOQUEIA, "Hora de atendimento não exposta: tempo de espera não é mensurável."),
             (ATENCAO, "Vínculo entre cada contribuição e o pedido executado não é completo."),
             (ATENCAO, "Período de cobertura diferente do extrato: comparar só na janela comum."),
+            (ATENCAO, "Situação desatualizada: \"aceito\" não quer dizer pendente (confirmado pelos "
+                      "administradores). Não serve para medir atendimento."),
         ],
         extras=[("Estados", _extra_exec)],
         pedir=[("Hora em que cada pedido foi atendido (exibido ou concluído na live)", ALTA, [1, 3]),
-               ("Confirmar se os pedidos de React e Música marcados como aceitos, sem conclusão, foram atendidos", ALTA, [1, 2]),
                ("Vínculo entre cada contribuição e o pedido executado", MEDIA, [1])],
     ),
     Familia(

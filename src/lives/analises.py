@@ -322,8 +322,9 @@ def aba_frente2(f2: dict, achados_html: str) -> str:
             "React e Música: preço por minuto de vídeo e volume",
             "Na fila de mídia, o valor pago dividido pela duração paga dá o preço por segundo de cada pedido. Em cada "
             "mês, o preço mais comum é tomado como a tabela vigente; quem paga o mínimo por um vídeo curto ou dá "
-            "gorjeta fica fora dela. A tabela é inferida dos dados e precisa da confirmação dos administradores. "
-            "Atenção: o volume também depende de quantas lives houve no mês.",
+            "gorjeta fica fora dela. "
+            "Atenção: o volume também depende de quantas lives houve no mês e de outras mudanças feitas junto, "
+            "como a meta da live.",
             f'<div class="rolagem">{graf}</div>' + tab))
 
     # 6. origem dos vídeos e situação da fila
@@ -333,7 +334,7 @@ def aba_frente2(f2: dict, achados_html: str) -> str:
                   [[e(o["origem"]), _fmt(o["n"]), _fmt(o["react"]), _fmt(o["musica"]), R(o["mediana"])] for o in og])
     est = _tabela(["Tipo", "Situação na fila", "Pedidos", "Valor"],
                   [[e(x["tipo"]), e(x["estado"]), _fmt(x["n"]), R(x["centavos"])] for x in md["estados"]],
-                  resumo="Situação dos pedidos na fila")
+                  resumo="Situação dos pedidos na fila (o campo nem sempre é atualizado)")
     blocos.append(_bloco(
         "De onde vêm os vídeos pedidos",
         f"{_fmt(md['n'])} pedidos de React e Música na fila, de {G.mes_legivel(md['de'])} a "
