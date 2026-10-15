@@ -226,3 +226,89 @@ def linhas_mensais(series: dict[str, dict[str, float]], cores: dict[str, str], m
                    f'<text x="{xf + 18:.1f}" y="{yl + 4:.1f}" class="rot">{e(nome)}</text>')
     out.append(f'<line x1="{L}" x2="{W - R}" y1="{T + ih}" y2="{T + ih}" class="base"/></svg>')
     return "".join(out)
+
+
+def linhas_categoricas(series: dict[str, list[float | None]], cores: dict[str, str], xs: list[str],
+                       fmt=lambda v: f"{v:.1f}".replace(".", ","), altura: int = 250, rotulo_y: str = "") -> str:
+    """Várias séries sobre o mesmo eixo de categorias (ex.: horas do dia). None = sem dado
+    suficiente: a linha é interrompida ali, em vez de desenhar zero."""
+    L, R, T, B = 56, 200, 18, 28
+    W = 800
+    ih = altura - T - B
+    vals = [v for s in series.values() for v in s if v is not None]
+    ticks = _ticks(max(vals) if vals else 1)
+    topo = ticks[-1] or 1
+    passo = (W - L - R) / max(len(xs) - 1, 1)
+    X = lambda i: L + i * passo  # noqa: E731
+    Y = lambda v: T + ih - v / topo * ih  # noqa: E731
+    out = [f'<svg viewBox="0 0 {W} {altura}" class="graf" style="min-width:{W}px;max-width:{W}px" role="img">']
+    for t in ticks:
+        out.append(f'<line x1="{L}" x2="{W - R}" y1="{Y(t):.1f}" y2="{Y(t):.1f}" class="grade"/>'
+                   f'<text x="{L - 8}" y="{Y(t) + 4:.1f}" class="eixo" text-anchor="end">{e(fmt(t))}</text>')
+    if rotulo_y:
+        out.append(f'<text x="{L}" y="{T - 6}" class="eixo">{e(rotulo_y)}</text>')
+    for i, x in enumerate(xs):
+        if i % 3 == 0 or i == len(xs) - 1:
+            out.append(f'<text x="{X(i):.1f}" y="{altura - 8}" class="eixo" text-anchor="middle">{e(x)}</text>')
+    fins = []
+    for nome, s in series.items():
+        trecho, d = [], []
+        for i, v in enumerate(s):
+            if v is None:
+                trecho = []
+                continue
+            d.append(f"{'L' if trecho else 'M'}{X(i):.1f},{Y(v):.1f}")
+            trecho.append(i)
+        out.append(f'<path d="{" ".join(d)}" fill="none" stroke="{cores[nome]}" stroke-width="2" '
+                   f'stroke-linejoin="round" stroke-linecap="round"/>')
+        for i, v in enumerate(s):
+            if v is None:
+                continue
+            dica = f"{xs[i]} · {nome}: {fmt(v)}"
+            out.append(f'<circle cx="{X(i):.1f}" cy="{Y(v):.1f}" r="9" fill="transparent" {_tip(dica)}>'
+                       f'<title>{e(dica)}</title></circle>')
+        ult = max((i for i, v in enumerate(s) if v is not None), default=None)
+        if ult is not None:
+            out.append(f'<circle cx="{X(ult):.1f}" cy="{Y(s[ult]):.1f}" r="4" fill="{cores[nome]}" class="anel"/>')
+            fins.append([Y(s[ult]), nome, X(ult)])
+    fins.sort()
+    for i in range(1, len(fins)):
+        if fins[i][0] - fins[i - 1][0] < 14:
+            fins[i][0] = fins[i - 1][0] + 14
+    for yl, nome, xf in fins:
+        out.append(f'<line x1="{xf + 6:.1f}" x2="{xf + 14:.1f}" y1="{yl:.1f}" y2="{yl:.1f}" '
+                   f'stroke="{cores[nome]}" stroke-width="2"/>'
+                   f'<text x="{xf + 18:.1f}" y="{yl + 4:.1f}" class="rot">{e(nome)}</text>')
+    out.append(f'<line x1="{L}" x2="{W - R}" y1="{T + ih}" y2="{T + ih}" class="base"/></svg>')
+    return "".join(out)
+
+
+def colunas_simples(pontos: list[tuple[str, float, str]], marca_x: int | None = None, rotulo_marca: str = "",
+                    cor: str = "var(--accent)", altura: int = 220, rotulos_cada: int = 4,
+                    fmt=lambda v: f"{v:.1f}".replace(".", ",")) -> str:
+    """Colunas sobre categorias em sequência (ex.: blocos de 15 min). `marca_x` desenha uma
+    linha vertical antes da coluna de índice dado (ex.: o início da live)."""
+    L, R, T, B = 52, 10, 20, 30
+    W = max(560, 14 * len(pontos) + L + R)
+    ih = altura - T - B
+    ticks = _ticks(max(v for _, v, _ in pontos) or 1)
+    topo = ticks[-1] or 1
+    passo = (W - L - R) / len(pontos)
+    bw = min(12, passo - 2)
+    out = [f'<svg viewBox="0 0 {W} {altura}" class="graf" style="min-width:{W}px;max-width:{W}px" role="img">']
+    for t in ticks:
+        y = T + ih - t / topo * ih
+        out.append(f'<line x1="{L}" x2="{W - R}" y1="{y:.1f}" y2="{y:.1f}" class="grade"/>'
+                   f'<text x="{L - 8}" y="{y + 4:.1f}" class="eixo" text-anchor="end">{e(fmt(t))}</text>')
+    for i, (rot, v, dica) in enumerate(pontos):
+        x = L + i * passo + (passo - bw) / 2
+        h = v / topo * ih
+        out.append(_barra_v(x, T + ih - h, bw, h, cor, _tip(dica)).replace("/>", f"><title>{e(dica)}</title></path>"))
+        if i % rotulos_cada == 0:
+            out.append(f'<text x="{x + bw / 2:.1f}" y="{altura - 8}" class="eixo" text-anchor="middle">{e(rot)}</text>')
+    if marca_x is not None:
+        xm = L + marca_x * passo
+        out.append(f'<line x1="{xm:.1f}" x2="{xm:.1f}" y1="{T - 8}" y2="{T + ih}" class="minimo"/>'
+                   f'<text x="{xm + 5:.1f}" y="{T - 8}" class="rot">{e(rotulo_marca)}</text>')
+    out.append(f'<line x1="{L}" x2="{W - R}" y1="{T + ih}" y2="{T + ih}" class="base"/></svg>')
+    return "".join(out)

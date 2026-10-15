@@ -357,7 +357,9 @@ FAMILIAS: list[Familia] = [
         extras=[("Com início real", _extra_lives_inicio)],
         avisos_calculados=_avisos_lives,
         avisar_sem_data=False,
-        pedir=[("Início real (data e hora) das lives que vieram sem esse campo", ALTA, [3])],
+        pedir=[("Início real (data e hora) das lives que vieram sem esse campo", ALTA, [3]),
+               ("Lives que aconteceram e não estão no catálogo: noites com pedidos de React e volume de "
+                "doações típico de live, sem live registrada", ALTA, [3])],
     ),
     Familia(
         id="yt_transcricoes", nome="Transcrições", fonte="YouTube",

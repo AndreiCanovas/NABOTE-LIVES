@@ -27,13 +27,14 @@ MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "
 ANDAMENTO = [
     ("Fase 0", "Inventário dos dados", "feito"),
     ("Fase 1", "Base de dados e status", "feito"),
-    ("Fase 2", "Frente 1: perfil e preço", "agora"),
+    ("Fase 2", "Frente 1: perfil e preço", "feito"),
     ("Fase 3", "Frente 2: demanda", ""),
-    ("Fase 4", "Frente 3: efeito da live", ""),
+    ("Fase 4", "Frente 3: efeito da live", "agora"),
     ("Fase 5", "Frente 4 e testes", ""),
 ]
 
-ABAS = [("status", "Status dos dados"), ("frente1", "Frente 1: perfil e preço"), ("doc", "Documentação"),
+ABAS = [("status", "Status dos dados"), ("frente1", "Frente 1: perfil e preço"),
+        ("frente3", "Frente 3: efeito da live"), ("doc", "Documentação"),
         ("prompt", "Prompt para os administradores"), ("resumo", "Resumo para analistas")]
 
 e = html.escape
@@ -302,6 +303,99 @@ def aba_frente1(f1: dict, achados_html: str) -> str:
 </section>"""
 
 
+CORES_F3 = {"Live registrada": "var(--s3)", "Provável live sem registro": "var(--s4)",
+            "Sem sinal de live": "var(--eixo)"}
+
+
+def aba_frente3(f3: dict, achados_html: str) -> str:
+    from . import graficos as G
+    R, P = G.reais, G.pct
+    x = lambda v: f"{v:.1f}×".replace(".", ",")  # noqa: E731
+    ja, el, ec, su = f3["janela"], f3["esperado_limpo"], f3["esperado"], f3["suspeitas"]
+    total_n = f3["doacoes"]
+    meses_sus = sorted(su["por_mes"].items(), key=lambda kv: -kv[1])
+    principais = [G.mes_legivel(m) for m, n in meses_sus if n >= max(1, su["noites"] * 0.25)]
+    ladr = "".join([
+        _ladrilho("Lives registradas", f"{P(f3['dentro']['pct_tempo'])} do tempo",
+                  f"concentram {P(f3['dentro']['pct_n'])} das doações e {P(f3['dentro']['pct_valor'])} do valor"),
+        _ladrilho("Efeito da live, na mesma hora do dia", f"{x(el['efeito_n'])} doações",
+                  f"{x(el['efeito_valor'])} no valor · conservador: {x(ec['efeito_n'])} e {x(ec['efeito_valor'])}"),
+        _ladrilho("Ritmo", f"{R(f3['taxa']['live_reais_h'], False)} por hora",
+                  f"durante a live; {R(f3['taxa']['fora_reais_h'], False)} por hora nas horas sem sinal de live"),
+        _ladrilho("Provável live sem registro", f"{su['noites']} noites",
+                  f"{_fmt(su['n'])} doações ({P(su['n'] / total_n)} da janela)"
+                  + (f", sobretudo {' e '.join(principais)}" if principais else "")),
+    ])
+    blocos = []
+
+    # 1. ritmo por hora do dia, nas três condições
+    ordem = list(range(12, 24)) + list(range(0, 6))   # do meio-dia às 5h: fora disso quase não há doação
+    ph = {h["hora"]: h for h in f3["por_hora"]}
+    series = {"Live registrada": [ph[h]["live_n_h"] for h in ordem],
+              "Provável live sem registro": [ph[h]["suspeita_n_h"] for h in ordem],
+              "Sem sinal de live": [ph[h]["fora_n_h"] for h in ordem]}
+    xs = [f"{h}h" for h in ordem]
+    tab = _tabela(["Hora (Brasília)", "Live registrada", "Provável live sem registro", "Sem sinal de live"],
+                  [[f"{h}h"] + [("—" if v is None else f"{v:.2f}".replace(".", ",")) for v in
+                                (ph[h]["live_n_h"], ph[h]["suspeita_n_h"], ph[h]["fora_n_h"])] for h in ordem])
+    blocos.append(_bloco(
+        "Doações por hora, na mesma hora do dia",
+        "Quantas doações acontecem por hora em cada condição, hora a hora (Brasília), do meio-dia às 5h. "
+        "Comparar na mesma hora tira o efeito de a doação ser noturna. Hora sem exposição suficiente fica sem ponto.",
+        _legenda(list(CORES_F3.items())) + f'<div class="rolagem">{G.linhas_categoricas(series, CORES_F3, xs, rotulo_y="doações por hora")}</div>' + tab))
+
+    # 2. perfil desde o início da live
+    pts = [(f"{p['min'] // 60:+d}h" if p["min"] % 60 == 0 else "", p["doacoes_por_live"] or 0,
+            f"{p['min']:+d} min do início: {str(round(p['doacoes_por_live'] or 0, 2)).replace('.', ',')} doações por live "
+            f"({p['lives']} lives ainda no ar)") for p in f3["perfil_inicio"]]
+    zero = next(i for i, p in enumerate(f3["perfil_inicio"]) if p["min"] == 0)
+    tab = _tabela(["Minutos desde o início", "Doações por live (15 min)", "Lives no ar"],
+                  [[f"{p['min']:+d}", f"{(p['doacoes_por_live'] or 0):.2f}".replace(".", ","), str(p["lives"])]
+                   for p in f3["perfil_inicio"]])
+    blocos.append(_bloco(
+        "O que acontece depois que a live começa",
+        "Média de doações por live em cada bloco de 15 minutos, contada só entre as lives ainda no ar. "
+        "Atenção: as lives começam em horários parecidos, então o crescimento ao longo da live se mistura com a "
+        "chegada da noite; este gráfico mostra o ritmo, não separa as duas causas.",
+        f'<div class="rolagem">{G.colunas_simples([(r, v, d) for r, v, d in pts], marca_x=zero, rotulo_marca="início da live")}</div>' + tab))
+
+    # 3. temas
+    if f3["temas"]:
+        mx = max(t["reais_por_hora"] for t in f3["temas"])
+        graf = G.barras_h([(f"{t['tema']} ({t['lives']})", t["reais_por_hora"], R(t["reais_por_hora"], False) + "/h")
+                           for t in f3["temas"]], maximo=mx, largura_rotulo=300, W=620)
+        tab = _tabela(["Tema principal (pelo título)", "Lives", "Horas no ar", "Doações", "Valor", "Valor por hora"],
+                      [[e(t["tema"]), str(t["lives"]), f"{t['horas']:.0f}", _fmt(t["n"]), R(t["centavos"]),
+                        R(t["reais_por_hora"], False)] for t in f3["temas"]])
+        blocos.append(_bloco(
+            "Valor por hora de live, por tema",
+            f"Tema principal classificado pelo título da live; entre parênteses, quantas lives. Só temas com "
+            f"{f3['temas_min_lives']} lives ou mais. Leitura indicativa: poucas lives por tema, e tema se mistura "
+            "com dia, horário e convidado.",
+            f'<div class="rolagem">{graf}</div>' + tab))
+
+    # 4. lives sem registro, por mês
+    if su["por_mes"]:
+        mx = max(su["por_mes"].values())
+        graf = G.barras_h([(G.mes_legivel(m), n, f"{n} noite" + ("s" if n != 1 else ""))
+                           for m, n in su["por_mes"].items()],
+                          maximo=mx, largura_rotulo=80, W=420)
+        blocos.append(_bloco(
+            "Noites com cara de live, sem live registrada",
+            f"Noites sem live no catálogo, mas com {su['criterio']['react']} ou mais pedidos de React ou "
+            f"{su['criterio']['doacoes']} ou mais doações. Ficaram fora da linha de base e entraram como pedido de "
+            "dados: o catálogo de lives desses meses parece incompleto.",
+            f'<div class="rolagem">{graf}</div>'))
+
+    return f"""
+<section class="panel" id="p-frente3">
+  <p class="lead">A live move as doações? Cruzamento do minuto de cada doação da Castcoin com o horário de cada live, de {G.mes_legivel(ja['inicio'][:7])} a {G.mes_legivel(ja['fim'][:7])}: os meses em que toda live conhecida tem início e fim registrados. {f3['lives']} lives, {_fmt(total_n)} doações. Tudo agregado.</p>
+  {f'<div class="achados"><h2>O que os números dizem</h2>{achados_html}</div>' if achados_html else ''}
+  <div class="ladrilhos">{ladr}</div>
+  {''.join(blocos)}
+</section>"""
+
+
 def aba_doc(doc: dict, rev: int | None) -> str:
     toc = "".join(f'<li><a href="#{a}">{e(t)}</a></li>' for a, t in doc["secoes"])
     return f"""
@@ -312,7 +406,8 @@ def aba_doc(doc: dict, rev: int | None) -> str:
 </section>"""
 
 
-def montar(st: dict, doc: dict, rev: int | None, f1: dict | None = None, achados_html: str = "") -> str:
+def montar(st: dict, doc: dict, rev: int | None, f1: dict | None = None, achados_html: str = "",
+           f3: dict | None = None, achados3_html: str = "") -> str:
     css = (PAGINA / "estilo.css").read_text(encoding="utf-8") + _css_abas()
     prompt = (PAGINA / "prompt.html").read_text(encoding="utf-8")
     resumo = (PAGINA / "resumo_analistas.html").read_text(encoding="utf-8")
@@ -335,6 +430,7 @@ def montar(st: dict, doc: dict, rev: int | None, f1: dict | None = None, achados
 </header>
 {aba_status(st)}
 {aba_frente1(f1, achados_html) if f1 else '<section class="panel" id="p-frente1"><p class="lead">Em preparação.</p></section>'}
+{aba_frente3(f3, achados3_html) if f3 else '<section class="panel" id="p-frente3"><p class="lead">Em preparação.</p></section>'}
 {aba_doc(doc, rev)}
 <section class="panel" id="p-prompt">
 {prompt}</section>
@@ -346,7 +442,7 @@ def montar(st: dict, doc: dict, rev: int | None, f1: dict | None = None, achados
 <script>
 (function(){{
   var h=location.hash.replace('#','');
-  var abas={{status:1,frente1:1,doc:1,prompt:1,resumo:1}};
+  var abas={{status:1,frente1:1,frente3:1,doc:1,prompt:1,resumo:1}};
   if(abas[h]) {{ var r=document.getElementById('r-'+h); if(r) r.checked=true; }}
   if(h.indexOf('doc-')===0) {{ var d=document.getElementById('r-doc'); if(d) d.checked=true; }}
   document.addEventListener('click',function(ev){{

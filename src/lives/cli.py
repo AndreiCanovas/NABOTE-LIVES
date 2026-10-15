@@ -3,6 +3,7 @@
     lives importar <zip>                  zip da entrega -> banco
     lives status                          status das famílias (JSON na pasta de trabalho)
     lives frente1                         agregados da Frente 1 (JSON na pasta de trabalho)
+    lives frente3                         agregados da Frente 3 (JSON na pasta de trabalho)
     lives pagina --plano <leitura.json>   página compartilhada, a partir do plano + status
 
 Tudo que sai daqui é gravado na pasta de trabalho, fora do repositório.
@@ -16,7 +17,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import db, doc_html, frente1, importar, pagina, status
+from . import db, doc_html, frente1, frente3, importar, pagina, status
 
 SAIDA = db.PASTA_DADOS / "processado"
 
@@ -56,6 +57,13 @@ def cmd_frente1(a) -> int:
     return 0
 
 
+def cmd_frente3(a) -> int:
+    r = frente3.calcular(db.conectar(a.banco))
+    _gravar(Path(a.saida), json.dumps(r, ensure_ascii=False, indent=1, default=str))
+    print(f"-> {a.saida}")
+    return 0
+
+
 def cmd_pagina(a) -> int:
     st = (json.loads(Path(a.status).read_text(encoding="utf-8")) if a.status
           else status.status_geral(db.conectar(a.banco)))
@@ -63,7 +71,9 @@ def cmd_pagina(a) -> int:
     f1 = json.loads(Path(a.frente1).read_text(encoding="utf-8")) if a.frente1 else None
     # os achados são texto escrito a partir dos dados: vivem na pasta de trabalho, não no código
     achados = Path(a.achados).read_text(encoding="utf-8") if a.achados else ""
-    html = pagina.montar(st, doc_html.converter(xml), rev, f1, achados)
+    f3 = json.loads(Path(a.frente3).read_text(encoding="utf-8")) if a.frente3 else None
+    achados3 = Path(a.achados3).read_text(encoding="utf-8") if a.achados3 else ""
+    html = pagina.montar(st, doc_html.converter(xml), rev, f1, achados, f3, achados3)
     for destino in a.saida:
         _gravar(Path(destino), html)
         print(f"-> {destino}")
@@ -83,12 +93,16 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--status", help="status.json já calculado (padrão: calcula agora)")
     g.add_argument("--frente1", help="frente1.json já calculado")
     g.add_argument("--achados", help="HTML com os achados da Frente 1 (fica na pasta de trabalho)")
+    g.add_argument("--frente3", help="frente3.json já calculado")
+    g.add_argument("--achados3", help="HTML com os achados da Frente 3 (fica na pasta de trabalho)")
     g.add_argument("--saida", nargs="+", default=[str(SAIDA / "pagina" / "painel.html")])
     f = sub.add_parser("frente1", help="agregados da Frente 1")
     f.add_argument("--saida", default=str(SAIDA / "frente1.json"))
+    f3 = sub.add_parser("frente3", help="agregados da Frente 3")
+    f3.add_argument("--saida", default=str(SAIDA / "frente3.json"))
     a = p.parse_args(argv)
     return {"importar": cmd_importar, "status": cmd_status, "frente1": cmd_frente1,
-            "pagina": cmd_pagina}[a.cmd](a)
+            "frente3": cmd_frente3, "pagina": cmd_pagina}[a.cmd](a)
 
 
 if __name__ == "__main__":
