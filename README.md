@@ -15,7 +15,9 @@ git config core.hooksPath .githooks       # trava de dados, uma vez por clone
 
 lives importar <zip da entrega>           # zip -> banco, com procedência
 lives status                              # status de cada família de dados
-lives pagina --plano <leitura do plano>   # página para administradores e analistas
+lives frente1 | frente2 | frente3          # agregados de cada frente (JSON)
+lives pagina --plano <leitura do plano>   # painel de dados: status, plano, pedido de extração
+lives analises                            # página de análises: visão geral + frentes 1, 2 e 3
 ```
 
 Tudo que esses comandos produzem vai para a pasta de trabalho
@@ -29,7 +31,13 @@ Tudo que esses comandos produzem vai para a pasta de trabalho
 | `familias.py` | o que se sabe de cada família de dados: status e razão, frentes, avisos e o que falta pedir. Sem número tirado dos dados |
 | `status.py` | volume, histórico (meses cobertos e meses com dado) e avisos calculados do banco |
 | `doc_html.py` | converte o plano (documento, fonte da verdade) em HTML |
-| `pagina.py` | junta status + plano + pedido de extração na página compartilhada |
+| `frente1.py`, `frente2.py`, `frente3.py` | agregados de cada frente; o léxico de temas da Frente 2 e os textos de achados ficam na pasta de trabalho |
+| `graficos.py` | gráficos em SVG puro, com dica ao passar o mouse e tabela ao lado |
+| `pagina.py` | painel de dados: status + plano + pedido de extração, para quem acompanha a base |
+| `analises.py` | página de análises: visão geral e uma aba por frente, para quem lê os resultados |
+
+São duas páginas, compartilhadas à parte e só por convite: o painel não traz
+receita; a página de análises traz.
 
 ## Sincronizar a página com o plano
 

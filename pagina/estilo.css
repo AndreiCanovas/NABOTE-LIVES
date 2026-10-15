@@ -207,3 +207,8 @@ details.numeros table{min-width:480px;font-size:.82rem}
 .tip{position:fixed;z-index:50;pointer-events:none;background:var(--fg);color:var(--bg);font-size:.78rem;
   line-height:1.4;padding:6px 9px;max-width:280px;opacity:0;transition:opacity .08s}
 .tip.on{opacity:1}
+/* visão geral da página de análises */
+.manchetes{max-width:80ch;color:var(--fg)}
+.manchetes li::marker{color:var(--accent)}
+.ir{align-self:flex-start;color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.ir:hover{text-decoration-thickness:2px}

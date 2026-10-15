@@ -5,7 +5,8 @@
     lives frente1                         agregados da Frente 1 (JSON na pasta de trabalho)
     lives frente2 [--lexico <json>]       agregados da Frente 2 (léxico e JSON na pasta de trabalho)
     lives frente3                         agregados da Frente 3 (JSON na pasta de trabalho)
-    lives pagina --plano <leitura.json>   página compartilhada, a partir do plano + status
+    lives pagina --plano <leitura.json>   painel de dados, a partir do plano + status
+    lives analises                        página de análises das frentes 1, 2 e 3
 
 Tudo que sai daqui é gravado na pasta de trabalho, fora do repositório.
 """
@@ -16,9 +17,10 @@ import argparse
 import json
 import os
 import sys
+from datetime import date
 from pathlib import Path
 
-from . import db, doc_html, frente1, frente2, frente3, importar, pagina, status
+from . import analises, db, doc_html, frente1, frente2, frente3, importar, pagina, status
 
 SAIDA = db.PASTA_DADOS / "processado"
 
@@ -77,14 +79,19 @@ def cmd_pagina(a) -> int:
     st = (json.loads(Path(a.status).read_text(encoding="utf-8")) if a.status
           else status.status_geral(db.conectar(a.banco)))
     xml, rev = doc_html.carregar_xml(a.plano)
-    f1 = json.loads(Path(a.frente1).read_text(encoding="utf-8")) if a.frente1 else None
+    html = pagina.montar(st, doc_html.converter(xml), rev)
+    for destino in a.saida:
+        _gravar(Path(destino), html)
+        print(f"-> {destino}")
+    return 0
+
+
+def cmd_analises(a) -> int:
+    ler = lambda c: json.loads(Path(c).read_text(encoding="utf-8")) if c else None  # noqa: E731
     # os achados são texto escrito a partir dos dados: vivem na pasta de trabalho, não no código
-    achados = Path(a.achados).read_text(encoding="utf-8") if a.achados else ""
-    f3 = json.loads(Path(a.frente3).read_text(encoding="utf-8")) if a.frente3 else None
-    achados3 = Path(a.achados3).read_text(encoding="utf-8") if a.achados3 else ""
-    f2 = json.loads(Path(a.frente2).read_text(encoding="utf-8")) if a.frente2 else None
-    achados2 = Path(a.achados2).read_text(encoding="utf-8") if a.achados2 else ""
-    html = pagina.montar(st, doc_html.converter(xml), rev, f1, achados, f3, achados3, f2, achados2)
+    texto = lambda c: Path(c).read_text(encoding="utf-8") if c else ""  # noqa: E731
+    html = analises.montar(ler(a.frente1), texto(a.achados1), ler(a.frente2), texto(a.achados2),
+                           ler(a.frente3), texto(a.achados3), date.today().isoformat())
     for destino in a.saida:
         _gravar(Path(destino), html)
         print(f"-> {destino}")
@@ -99,16 +106,16 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("zip")
     s = sub.add_parser("status", help="status das famílias de dados")
     s.add_argument("--saida", default=str(SAIDA / "status.json"))
-    g = sub.add_parser("pagina", help="página compartilhada")
+    g = sub.add_parser("pagina", help="painel de dados (status, plano, pedido de extração)")
     g.add_argument("--plano", required=True, help="leitura completa do documento do plano (JSON)")
     g.add_argument("--status", help="status.json já calculado (padrão: calcula agora)")
-    g.add_argument("--frente1", help="frente1.json já calculado")
-    g.add_argument("--achados", help="HTML com os achados da Frente 1 (fica na pasta de trabalho)")
-    g.add_argument("--frente2", help="frente2.json já calculado")
-    g.add_argument("--achados2", help="HTML com os achados da Frente 2 (fica na pasta de trabalho)")
-    g.add_argument("--frente3", help="frente3.json já calculado")
-    g.add_argument("--achados3", help="HTML com os achados da Frente 3 (fica na pasta de trabalho)")
     g.add_argument("--saida", nargs="+", default=[str(SAIDA / "pagina" / "painel.html")])
+    n = sub.add_parser("analises", help="página de análises das frentes 1, 2 e 3")
+    for k in ("1", "2", "3"):
+        n.add_argument(f"--frente{k}", default=str(SAIDA / f"frente{k}.json"), help=f"frente{k}.json já calculado")
+        n.add_argument(f"--achados{k}", default=str(SAIDA / f"frente{k}_achados.html"),
+                       help=f"HTML com os achados da Frente {k} (fica na pasta de trabalho)")
+    n.add_argument("--saida", nargs="+", default=[str(SAIDA / "pagina" / "analises.html")])
     f = sub.add_parser("frente1", help="agregados da Frente 1")
     f.add_argument("--saida", default=str(SAIDA / "frente1.json"))
     f2 = sub.add_parser("frente2", help="agregados da Frente 2")
@@ -119,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
     f3.add_argument("--saida", default=str(SAIDA / "frente3.json"))
     a = p.parse_args(argv)
     return {"importar": cmd_importar, "status": cmd_status, "frente1": cmd_frente1,
-            "frente2": cmd_frente2, "frente3": cmd_frente3, "pagina": cmd_pagina}[a.cmd](a)
+            "frente2": cmd_frente2, "frente3": cmd_frente3, "pagina": cmd_pagina, "analises": cmd_analises}[a.cmd](a)
 
 
 if __name__ == "__main__":
